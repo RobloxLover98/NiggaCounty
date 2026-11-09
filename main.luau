@@ -1,4 +1,4 @@
-local word = 'County'
+local word = 'Nigger'
 local repo = 'https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/'
 
 local Library = loadstring(game:HttpGet(repo .. 'Library.lua'))()
@@ -97,16 +97,57 @@ local function pickHighestDamageGun()
     return best.gun, best.settings, best.damage
 end
 
-local KillGun, KillGunSettings, KillGunDamage = pickHighestDamageGun()
+local KillGun, KillGunSettings, KillGunDamage
 local KillGunMod = { DamageMod = 1, minDamageMod = 1 }
+local KillGunConnection
+local KillGunLabel
+
+local function killGunLabelText()
+    if KillGun and KillGun:IsDescendantOf(game) then
+        return ('Using: %s (head %s)'):format(KillGun.Name, tostring(KillGunDamage))
+    end
+    return 'No ACS gun found.'
+end
+
+local function updateKillGunLabel()
+    if KillGunLabel then
+        KillGunLabel:SetText(killGunLabelText())
+    end
+end
+
+local function clearKillGun()
+    if KillGunConnection then
+        KillGunConnection:Disconnect()
+        KillGunConnection = nil
+    end
+    KillGun, KillGunSettings, KillGunDamage = nil, nil, nil
+end
+
+local function rescanKillGun()
+    clearKillGun()
+    KillGun, KillGunSettings, KillGunDamage = pickHighestDamageGun()
+
+    if KillGun then
+        KillGunConnection = KillGun.AncestryChanged:Connect(function()
+            if not KillGun or not KillGun:IsDescendantOf(game) then
+                clearKillGun()
+                updateKillGunLabel()
+            end
+        end)
+    end
+
+    updateKillGunLabel()
+end
+
+rescanKillGun()
 
 local function KillPlayer(Player)
     if not DamageRemote or not secretkey then
         return
     end
 
-    if not KillGun or not KillGunSettings then
-        KillGun, KillGunSettings, KillGunDamage = pickHighestDamageGun()
+    if not KillGun or not KillGunSettings or not KillGun:IsDescendantOf(game) then
+        rescanKillGun()
         if not KillGun then
             return
         end
@@ -192,11 +233,7 @@ KillAllGroup:AddDropdown('KillPlayerDropdown', {
     Multi = true,
 })
 
-local KillGunLabel = KillAllGroup:AddLabel(
-    KillGun
-        and ('Using: %s (head %s)'):format(KillGun.Name, tostring(KillGunDamage))
-        or 'No ACS gun found.'
-)
+KillGunLabel = KillAllGroup:AddLabel(killGunLabelText())
 
 KillAllGroup:AddButton({
     Text = 'Kill',
@@ -218,15 +255,160 @@ KillAllGroup:AddButton({
     Tooltip = 'annihilate ' .. string.lower(word),
 }):AddButton({
     Text = 'Rescan guns',
-    Func = function()
-        KillGun, KillGunSettings, KillGunDamage = pickHighestDamageGun()
-        KillGunLabel:SetText(
-            KillGun
-                and ('Using: %s (head %s)'):format(KillGun.Name, tostring(KillGunDamage))
-                or 'No ACS gun found.'
-        )
-    end,
+    Func = rescanKillGun,
 })
+
+local CARJACK_SCAN_INTERVAL = 2
+
+local Carjacking = {
+    vehicles = {},
+    highlights = {},
+}
+
+local CarjackingGroup = Main:AddLeftGroupbox('Carjacking')
+
+CarjackingGroup:AddToggle('Carjack_Highlight', {
+    Text = 'Highlight',
+    Default = false,
+    Tooltip = 'Add a Highlight instance to each detected vehicle.',
+})
+
+CarjackingGroup:AddDropdown('Carjack_Target', {
+    Values = {},
+    Multi = false,
+    AllowNull = true,
+    Text = 'Vehicle',
+})
+
+local function removeCarjackHighlight(model)
+    local hl = Carjacking.highlights[model]
+    if hl then
+        pcall(function()
+            hl:Destroy()
+        end)
+    end
+    Carjacking.highlights[model] = nil
+end
+
+local function addCarjackHighlight(model)
+    if Carjacking.highlights[model] or not model.Parent then
+        return
+    end
+
+    local hl = Instance.new('Highlight')
+    hl.Name = 'CarjackHighlight'
+    hl.Adornee = model
+    hl.Parent = model
+    Carjacking.highlights[model] = hl
+end
+
+local function clearAllCarjackHighlights()
+    for model in pairs(Carjacking.highlights) do
+        removeCarjackHighlight(model)
+    end
+end
+
+local function scanCarjackVehicles()
+    local models = {}
+    local seats = {}
+
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA('VehicleSeat') then
+            local model = obj:FindFirstAncestorOfClass('Model')
+            if model and not seats[model] then
+                seats[model] = obj
+                table.insert(models, model)
+            end
+        end
+    end
+
+    table.sort(models, function(a, b)
+        return a.Name:lower() < b.Name:lower()
+    end)
+
+    local counts = {}
+    for _, model in ipairs(models) do
+        counts[model.Name] = (counts[model.Name] or 0) + 1
+    end
+
+    local labels, map, seen = {}, {}, {}
+    for _, model in ipairs(models) do
+        local label
+        if counts[model.Name] == 1 then
+            label = model.Name
+        else
+            seen[model.Name] = (seen[model.Name] or 0) + 1
+            label = ('%s (%d)'):format(model.Name, seen[model.Name])
+        end
+
+        table.insert(labels, label)
+        map[label] = { model = model, seat = seats[model] }
+    end
+
+    local dropdown = Options.Carjack_Target
+    local current = dropdown.Value
+    dropdown:SetValues(labels)
+    dropdown:SetValue(map[current] and current or labels[1])
+
+    Carjacking.vehicles = map
+
+    if Toggles.Carjack_Highlight.Value then
+        local wanted = {}
+
+        for _, entry in pairs(map) do
+            wanted[entry.model] = true
+            addCarjackHighlight(entry.model)
+        end
+
+        for model in pairs(Carjacking.highlights) do
+            if not wanted[model] then
+                removeCarjackHighlight(model)
+            end
+        end
+    end
+end
+
+Toggles.Carjack_Highlight:OnChanged(function(enabled)
+    if enabled then
+        for _, entry in pairs(Carjacking.vehicles) do
+            addCarjackHighlight(entry.model)
+        end
+    else
+        clearAllCarjackHighlights()
+    end
+end)
+
+CarjackingGroup:AddButton('Carjack', function()
+    local entry = Carjacking.vehicles[Options.Carjack_Target.Value]
+    if not entry then
+        Library:Notify('No vehicle selected.')
+        return
+    end
+
+    local character = LocalPlayer.Character
+    local humanoid = character and character:FindFirstChildOfClass('Humanoid')
+
+    if not humanoid then
+        Library:Notify('No humanoid found.')
+        return
+    end
+
+    if not entry.seat or not entry.seat.Parent then
+        Library:Notify('Vehicle is no longer available.')
+        return
+    end
+
+    pcall(function()
+        entry.seat:Sit(humanoid)
+    end)
+end)
+
+task.spawn(function()
+    while not Library.Unloaded do
+        scanCarjackVehicles()
+        task.wait(CARJACK_SCAN_INTERVAL)
+    end
+end)
 
 local EffectsGroup = Main:AddRightGroupbox('Bullet + Whizz')
 
@@ -1351,6 +1533,13 @@ end)
 
 Library:OnUnload(function()
     WatermarkConnection:Disconnect()
+
+    if KillGunConnection then
+        KillGunConnection:Disconnect()
+        KillGunConnection = nil
+    end
+
+    clearAllCarjackHighlights()
 
     for _, board in ipairs(SB.boards) do
         board.stopAll()
