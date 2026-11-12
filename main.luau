@@ -450,9 +450,7 @@ EffectsGroup:AddButton('Ear Ring', function()
 
     for _ = 1, 100 do
         for _, victim in ipairs(Players:GetPlayers()) do
-            if victim ~= LocalPlayer then
-                SuppressionRemote:FireServer(victim, 2, 999, 999999)
-            end
+            SuppressionRemote:FireServer(victim, 2, 999, 999999)
         end
     end
 end)
@@ -520,7 +518,7 @@ local function sendNextWhizz()
     local selected = Options.FX_WhizzTargets.Value or {}
 
     for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and (everyone or selected[player.Name] == true) then
+        if everyone or selected[player.Name] == true then
             WhizzRemote:FireServer(player)
         end
     end
@@ -568,13 +566,39 @@ end))
 
 local DestroyMapGroup = Main:AddRightGroupbox('Destroy map')
 
+local function pickBreachDestroyable()
+    if math.random() < 0.5 then
+        local characters = {}
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p.Character then
+                table.insert(characters, p.Character)
+            end
+        end
+        if #characters > 0 then
+            return characters[math.random(1, #characters)]
+        end
+    end
+
+    local models = {}
+    for _, obj in ipairs(workspace:GetChildren()) do
+        if obj:IsA('Model') then
+            table.insert(models, obj)
+        end
+    end
+    if #models > 0 then
+        return models[math.random(1, #models)]
+    end
+
+    return workspace
+end
+
 DestroyMapGroup:AddButton('Destroy map', function()
     if not BreachRemote then
         Library:Notify('ACS Breach remote is unavailable.')
         return
     end
 
-    local partSize = { X = 2048, Y = 2048, Z = 2048 }
+    local partSize = { X = 1499, Y = 1499, Z = 1499 }
     local horizontalSpacing = 2048
     local verticalSpacing = 2
 
@@ -590,7 +614,7 @@ DestroyMapGroup:AddButton('Destroy map', function()
                 pcall(function()
                     BreachRemote:InvokeServer(
                         3,
-                        { Fortified = {}, Destroyable = workspace },
+                        { Fortified = {}, Destroyable = pickBreachDestroyable() },
                         CFrame.new(),
                         CFrame.new(),
                         { CFrame = CFrame.new(Position), Size = partSize }
@@ -599,6 +623,20 @@ DestroyMapGroup:AddButton('Destroy map', function()
             end
         end
     end
+end)
+
+DestroyMapGroup:AddButton('Drain Fuel', function()
+    local fired = 0
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj.Name == 'GasEvent' and obj:IsA('RemoteEvent') then
+            pcall(function()
+                obj:FireServer(math.huge)
+            end)
+            fired += 1
+        end
+    end
+
+    Library:Notify(('Drained %d GasEvent(s).'):format(fired))
 end)
 
 local SOUND_GROUPS = {
