@@ -599,45 +599,23 @@ DestroyMapGroup:AddButton('Destroy map', function()
     end
 
     local partSize = { X = 1499, Y = 1499, Z = 1499 }
-    local horizontalSpacing = 2048
-    local verticalSpacing = 2
+    local spacing = 1499
 
-    for layer = 0, 199 do
-        for x = -1, 1 do
-            for z = -1, 1 do
-                local Position = Vector3.new(
-                    x * horizontalSpacing,
-                    layer * verticalSpacing + 0.5,
-                    z * horizontalSpacing
-                )
+    for i = 0, 9 do
+        local Position = Vector3.new(0, i * spacing + 0.5, 0)
 
-                pcall(function()
-                    BreachRemote:InvokeServer(
-                        3,
-                        { Fortified = {}, Destroyable = pickBreachDestroyable() },
-                        CFrame.new(),
-                        CFrame.new(),
-                        { CFrame = CFrame.new(Position), Size = partSize }
-                    )
-                end)
-            end
-        end
+        pcall(function()
+            BreachRemote:InvokeServer(
+                3,
+                { Fortified = {}, Destroyable = pickBreachDestroyable() },
+                CFrame.new(),
+                CFrame.new(),
+                { CFrame = CFrame.new(Position), Size = partSize }
+            )
+        end)
     end
 end)
 
-DestroyMapGroup:AddButton('Drain Fuel', function()
-    local fired = 0
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj.Name == 'GasEvent' and obj:IsA('RemoteEvent') then
-            pcall(function()
-                obj:FireServer(math.huge)
-            end)
-            fired += 1
-        end
-    end
-
-    Library:Notify(('Drained %d GasEvent(s).'):format(fired))
-end)
 
 local SOUND_GROUPS = {
     Weapons = { 'Fire', 'Echo', 'Magazine', 'Slide', 'Click', 'Safety', 'Handling', 'Any Weapon' },
@@ -1534,6 +1512,22 @@ if isComalCounty then
         local items = getItemNames(shopName)
         Options.WeaponSelect:SetValues(items)
         Options.WeaponSelect:SetValue(items[1])
+    end)
+
+    local VehicleToolsGroup = CountyTab:AddRightGroupbox('Vehicle Tools')
+
+    VehicleToolsGroup:AddButton('Drain Fuel', function()
+        local fired = 0
+        for _, obj in ipairs(workspace:GetDescendants()) do
+            if obj.Name == 'GasEvent' and obj:IsA('RemoteEvent') then
+                pcall(function()
+                    obj:FireServer(math.huge)
+                end)
+                fired += 1
+            end
+        end
+
+        Library:Notify(('Drained %d GasEvent(s).'):format(fired))
     end)
 
     createSoundboard(CountyTab, 'Vehicles', 'SB_V_', {
