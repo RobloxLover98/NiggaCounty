@@ -599,10 +599,24 @@ DestroyMapGroup:AddButton('Destroy map', function()
     end
 
     local partSize = { X = 1499, Y = 1499, Z = 1499 }
-    local spacing = 1499
 
-    for i = 0, 9 do
-        local Position = Vector3.new(0, i * spacing + 0.5, 0)
+    local function randomCharacterPosition()
+        local roots = {}
+        for _, p in ipairs(Players:GetPlayers()) do
+            local char = p.Character
+            local root = char and char:FindFirstChild('HumanoidRootPart')
+            if root and root:IsA('BasePart') then
+                table.insert(roots, root)
+            end
+        end
+        if #roots == 0 then
+            return Vector3.new(0, 0.5, 0)
+        end
+        return roots[math.random(1, #roots)].Position
+    end
+
+    for _ = 1, 10 do
+        local Position = randomCharacterPosition()
 
         pcall(function()
             BreachRemote:InvokeServer(
