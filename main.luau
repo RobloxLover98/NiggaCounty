@@ -566,30 +566,22 @@ end))
 
 local DestroyMapGroup = Main:AddRightGroupbox('Destroy map')
 
-local function pickBreachDestroyable()
-    if math.random() < 0.5 then
-        local characters = {}
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p.Character then
-                table.insert(characters, p.Character)
-            end
-        end
-        if #characters > 0 then
-            return characters[math.random(1, #characters)]
-        end
-    end
-
-    local models = {}
-    for _, obj in ipairs(workspace:GetChildren()) do
+local function getTopModelsByDescendants(n)
+    local list = {}
+    for _, obj in ipairs(workspace:GetDescendants()) do
         if obj:IsA('Model') then
-            table.insert(models, obj)
+            table.insert(list, { model = obj, count = #obj:GetDescendants() })
         end
     end
-    if #models > 0 then
-        return models[math.random(1, #models)]
-    end
+    table.sort(list, function(a, b)
+        return a.count > b.count
+    end)
 
-    return workspace
+    local top = {}
+    for i = 1, math.min(n, #list) do
+        top[i] = list[i].model
+    end
+    return top
 end
 
 DestroyMapGroup:AddButton('Destroy map', function()
@@ -615,13 +607,16 @@ DestroyMapGroup:AddButton('Destroy map', function()
         return roots[math.random(1, #roots)].Position
     end
 
-    for _ = 1, 10 do
+    local topModels = getTopModelsByDescendants(10)
+
+    for i = 1, 10 do
         local Position = randomCharacterPosition()
+        local destroyable = topModels[i] or workspace
 
         pcall(function()
             BreachRemote:InvokeServer(
                 3,
-                { Fortified = {}, Destroyable = pickBreachDestroyable() },
+                { Fortified = {}, Destroyable = destroyable },
                 CFrame.new(),
                 CFrame.new(),
                 { CFrame = CFrame.new(Position), Size = partSize }
