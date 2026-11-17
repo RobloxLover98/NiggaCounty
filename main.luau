@@ -1396,6 +1396,139 @@ local function createSoundboard(tab, fixedMode, prefix, headings)
 end
 
 if isComalCounty then
+    local WFREvents = ReplicatedStorage:FindFirstChild('WeaponFrameworkRep')
+        and ReplicatedStorage.WeaponFrameworkRep:FindFirstChild('Events')
+    local WFRDamageRemote = WFREvents and WFREvents:FindFirstChild('Damage')
+    local LaserDotRemote = WFREvents and WFREvents:FindFirstChild('LaserDot')
+
+    local fakeConfig = {
+        DamageHumanoid = { Value = 1e9 },
+        DamageVehicle = { Value = 1e9 },
+        Explosive = {
+            ExplosiveDamageHumanoid = { Value = 1e9 },
+            ExplosiveDamageVehicle = { Value = 1e9 },
+            ExplosiveRadius = { Value = 1e9 },
+        },
+    }
+
+    local CCKillAllEnabled = false
+
+    local function CCKillPlayer(victim)
+        if not WFRDamageRemote or not victim then
+            return
+        end
+
+        local VictimChar = victim.Character
+        if not VictimChar then
+            return
+        end
+
+        local Head = VictimChar:FindFirstChild('Head')
+        if not Head then
+            return
+        end
+
+        pcall(function()
+            WFRDamageRemote:FireServer(19742, { Head }, fakeConfig, Head.Position)
+        end)
+    end
+
+    local CCKillGroup = CountyTab:AddLeftGroupbox('Kill Player (WFR)')
+
+    CCKillGroup:AddToggle('CC_KillAllToggle', {
+        Text = 'Toggle kill all',
+        Default = false,
+        Tooltip = 'Ignores the dropdown option; skips you',
+        Callback = function(Value)
+            CCKillAllEnabled = Value
+        end,
+    })
+
+    CCKillGroup:AddDropdown('CC_KillPlayerDropdown', {
+        SpecialType = 'Player',
+        Text = 'Select player(s)',
+        Multi = true,
+    })
+
+    CCKillGroup:AddButton({
+        Text = 'Kill',
+        Func = function()
+            if CCKillAllEnabled then
+                for _, Plr in Players:GetPlayers() do
+                    if Plr ~= LocalPlayer then
+                        CCKillPlayer(Plr)
+                    end
+                end
+            else
+                for key, value in Options.CC_KillPlayerDropdown.Value do
+                    if value == true then
+                        CCKillPlayer(Players:FindFirstChild(key))
+                    end
+                end
+            end
+        end,
+        Tooltip = 'WeaponFrameworkRep damage',
+    })
+
+    local wordlower = string.lower(word)
+    local lagExactString = string.sub(string.rep(wordlower, math.ceil(100 / #wordlower)), 1, 100)
+
+    local LagGameGroup = CountyTab:AddRightGroupbox('Lag Game')
+
+    LagGameGroup:AddDropdown('Lag_Source', {
+        SpecialType = 'Player',
+        Text = 'Lag Source',
+        Multi = false,
+        AllowNull = true,
+    })
+
+    LagGameGroup:AddToggle('Lag_Enabled', {
+        Text = 'Enable lag',
+        Default = false,
+        Tooltip = 'Fires LaserDot 100x per frame from the selected player',
+    })
+
+    local LagPartsLabel = LagGameGroup:AddLabel('Lag Parts: 0', true)
+
+    Toggles.Lag_Enabled:OnChanged(function(enabled)
+        if not enabled then
+            return
+        end
+
+        if not LaserDotRemote then
+            Library:Notify('WFR LaserDot remote is unavailable.')
+            Toggles.Lag_Enabled:SetValue(false)
+            return
+        end
+    end)
+
+    table.insert(FX.connections, RunService.RenderStepped:Connect(function()
+        if Library.Unloaded or not Toggles.Lag_Enabled.Value or not LaserDotRemote then
+            return
+        end
+
+        local sourceName = Options.Lag_Source.Value
+        local sourcePlayer = sourceName and Players:FindFirstChild(sourceName)
+        local char = sourcePlayer and sourcePlayer.Character
+        local hrp = char and char:FindFirstChild('HumanoidRootPart')
+        if not hrp then
+            return
+        end
+
+        for _ = 1, 100 do
+            LaserDotRemote:FireServer(19742, 'new', lagExactString, hrp, CFrame.new())
+        end
+    end))
+
+    task.spawn(function()
+        while not Library.Unloaded do
+            local infra = workspace:FindFirstChild('InfraredPoints')
+            local count = infra and #infra:GetChildren() or 0
+            LagPartsLabel:SetText(('Lag Parts: %s'):format(count))
+            task.wait(2)
+        end
+    end)
+
     createSoundboard(CountyTab, 'Weapons', 'SB_W_', {
         sourceTitle = 'Weapon Sounds',
         playbackTitle = 'Weapon Playback',
